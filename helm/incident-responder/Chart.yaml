@@ -1,0 +1,23 @@
+apiVersion: v2
+name: incident-responder
+description: AI Infrastructure Incident Responder - Intelligent incident analysis and response platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - ai
+  - incident-response
+  - infrastructure
+  - fastapi
+  - react
+  - openai
+  - devops
+  - sre
+maintainers:
+  - name: Mohamed Gouda
+    email: mohamedgouda99@gmail.com
+    url: https://github.com/mohamedgouda99
+home: https://github.com/mohamedgouda99/ai-incident-responder
+sources:
+  - https://github.com/mohamedgouda99/ai-incident-responder
+icon: https://raw.githubusercontent.com/mohamedgouda99/ai-incident-responder/main/docs/icon.png

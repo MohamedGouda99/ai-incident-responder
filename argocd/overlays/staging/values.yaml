@@ -1,0 +1,73 @@
+# Staging environment overrides
+# Mirrors production topology with moderate resources
+
+createNamespace: true
+
+backend:
+  replicaCount: 2
+
+  image:
+    tag: staging
+    pullPolicy: Always
+
+  config:
+    OPENAI_MODEL: "gpt-4"
+    CORS_ORIGINS: "https://staging.incident-responder.example.com"
+    CHROMA_PERSIST_DIR: "/app/chroma_data"
+    LOG_LEVEL: "INFO"
+
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 75
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+
+frontend:
+  replicaCount: 2
+
+  image:
+    tag: staging
+    pullPolicy: Always
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+ingress:
+  enabled: true
+  host: staging.incident-responder.example.com
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  tls:
+    enabled: true
+    secretName: incident-responder-staging-tls
+
+networkPolicy:
+  enabled: true

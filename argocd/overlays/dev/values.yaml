@@ -1,0 +1,68 @@
+# Dev environment overrides
+# Reduced resources, single replicas, debug-friendly settings
+
+createNamespace: true
+
+backend:
+  replicaCount: 1
+
+  image:
+    tag: develop
+    pullPolicy: Always
+
+  config:
+    OPENAI_MODEL: "gpt-3.5-turbo"
+    CORS_ORIGINS: "*"
+    CHROMA_PERSIST_DIR: "/app/chroma_data"
+    LOG_LEVEL: "DEBUG"
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: false
+
+  podDisruptionBudget:
+    enabled: false
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+
+frontend:
+  replicaCount: 1
+
+  image:
+    tag: develop
+    pullPolicy: Always
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+ingress:
+  enabled: true
+  host: dev.incident-responder.example.com
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+  tls:
+    enabled: false
+    secretName: ""
+
+networkPolicy:
+  enabled: false

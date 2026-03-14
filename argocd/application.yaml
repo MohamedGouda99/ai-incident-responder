@@ -1,0 +1,61 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: incident-responder
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: incident-responder
+    app.kubernetes.io/part-of: ai-incident-responder
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    notifications.argoproj.io/subscribe.on-sync-succeeded.slack: incident-responder-alerts
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: incident-responder-alerts
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: incident-responder
+
+  source:
+    repoURL: https://github.com/mohamedgouda99/ai-incident-responder.git
+    targetRevision: main
+    path: helm/incident-responder
+    helm:
+      releaseName: incident-responder
+      valueFiles:
+        - values.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: incident-responder-prod
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health checks and ignore differences
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+      jsonPointers:
+        - /spec/minReplicas
+
+  revisionHistoryLimit: 10

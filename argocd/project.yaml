@@ -1,0 +1,72 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: incident-responder
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: incident-responder
+    app.kubernetes.io/part-of: ai-incident-responder
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    description: "AI Infrastructure Incident Responder project"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: "AI Infrastructure Incident Responder - multi-environment deployment"
+
+  # Source repositories allowed for this project
+  sourceRepos:
+    - "https://github.com/mohamedgouda99/ai-incident-responder.git"
+
+  # Destination clusters and namespaces
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: incident-responder-dev
+    - server: https://kubernetes.default.svc
+      namespace: incident-responder-staging
+    - server: https://kubernetes.default.svc
+      namespace: incident-responder-prod
+
+  # Allowed cluster-scoped resources
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: IngressClass
+
+  # Allowed namespace-scoped resources
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: policy
+      kind: PodDisruptionBudget
+
+  # Roles for RBAC
+  roles:
+    - name: admin
+      description: "Full access to incident-responder project"
+      policies:
+        - p, proj:incident-responder:admin, applications, *, incident-responder/*, allow
+      groups:
+        - incident-responder-admins
+
+    - name: readonly
+      description: "Read-only access to incident-responder project"
+      policies:
+        - p, proj:incident-responder:readonly, applications, get, incident-responder/*, allow
+      groups:
+        - incident-responder-viewers

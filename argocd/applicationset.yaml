@@ -1,0 +1,91 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: incident-responder
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: incident-responder
+    app.kubernetes.io/part-of: ai-incident-responder
+    app.kubernetes.io/managed-by: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: incident-responder-dev
+            targetRevision: develop
+            syncPolicy: automated
+            autoSync: true
+            selfHeal: true
+            prune: true
+          - env: staging
+            namespace: incident-responder-staging
+            targetRevision: staging
+            syncPolicy: automated
+            autoSync: true
+            selfHeal: true
+            prune: true
+          - env: prod
+            namespace: incident-responder-prod
+            targetRevision: main
+            syncPolicy: automated
+            autoSync: true
+            selfHeal: true
+            prune: true
+
+  template:
+    metadata:
+      name: "incident-responder-{{env}}"
+      namespace: argocd
+      labels:
+        app.kubernetes.io/name: incident-responder
+        app.kubernetes.io/part-of: ai-incident-responder
+        app.kubernetes.io/managed-by: argocd
+        environment: "{{env}}"
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-succeeded.slack: "incident-responder-{{env}}"
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: "incident-responder-{{env}}"
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: incident-responder
+
+      source:
+        repoURL: https://github.com/mohamedgouda99/ai-incident-responder.git
+        targetRevision: "{{targetRevision}}"
+        path: helm/incident-responder
+        helm:
+          releaseName: "incident-responder-{{env}}"
+          valueFiles:
+            - values.yaml
+            - ../../argocd/overlays/{{env}}/values.yaml
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{namespace}}"
+
+      syncPolicy:
+        automated:
+          prune: "{{prune}}"
+          selfHeal: "{{selfHeal}}"
+          allowEmpty: false
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas
+
+      revisionHistoryLimit: 10

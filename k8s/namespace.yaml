@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: incident-responder
+  labels:
+    app.kubernetes.io/name: incident-responder
+    app.kubernetes.io/part-of: ai-incident-responder
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    description: "AI Infrastructure Incident Responder application namespace"
