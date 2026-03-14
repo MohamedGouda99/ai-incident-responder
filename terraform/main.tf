@@ -19,144 +19,100 @@ provider "google" {
   region  = var.region
 }
 
-# Enable required APIs
-resource "google_project_service" "apis" {
-  for_each = toset([
+# ─── Enable Required GCP APIs ────────────────────────────────────────────────
+
+module "apis" {
+  source = "./modules/apis"
+
+  project_id = var.project_id
+  apis = [
     "run.googleapis.com",
     "containerregistry.googleapis.com",
+    "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "secretmanager.googleapis.com",
-  ])
-
-  project = var.project_id
-  service = each.value
-
-  disable_dependent_services = false
-  disable_on_destroy         = false
+  ]
 }
 
-# Secret for OpenAI API key
-resource "google_secret_manager_secret" "openai_key" {
-  secret_id = "openai-api-key"
-  project   = var.project_id
+# ─── IAM: Backend Service Account ────────────────────────────────────────────
 
-  replication {
-    auto {}
-  }
+module "backend_sa" {
+  source = "./modules/iam"
 
-  depends_on = [google_project_service.apis]
-}
-
-# Service account for Cloud Run
-resource "google_service_account" "backend" {
+  project_id   = var.project_id
   account_id   = "incident-responder-backend"
   display_name = "AI Incident Responder Backend"
-  project      = var.project_id
+  roles = [
+    "roles/logging.logWriter",
+    "roles/cloudtrace.agent",
+  ]
+
+  depends_on = [module.apis]
 }
 
-resource "google_secret_manager_secret_iam_member" "backend_secret_access" {
-  secret_id = google_secret_manager_secret.openai_key.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.backend.email}"
+# ─── Secret Manager: OpenAI API Key ──────────────────────────────────────────
+
+module "openai_secret" {
+  source = "./modules/secret-manager"
+
+  project_id = var.project_id
+  secret_id  = "openai-api-key"
+  accessor_members = [
+    "serviceAccount:${module.backend_sa.service_account_email}",
+  ]
+
+  depends_on = [module.apis, module.backend_sa]
 }
 
-# Backend Cloud Run service
-resource "google_cloud_run_v2_service" "backend" {
-  name     = "incident-responder-backend"
-  location = var.region
-  project  = var.project_id
+# ─── Cloud Run: Backend Service ───────────────────────────────────────────────
 
-  template {
-    service_account = google_service_account.backend.email
+module "backend" {
+  source = "./modules/cloud-run"
 
-    scaling {
-      min_instance_count = 0
-      max_instance_count = var.max_instances
-    }
+  project_id   = var.project_id
+  region       = var.region
+  service_name = "incident-responder-backend"
+  image        = "${var.region}-docker.pkg.dev/${var.project_id}/incident-responder/backend:latest"
 
-    containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/incident-responder/backend:latest"
+  container_port        = 8000
+  service_account_email = module.backend_sa.service_account_email
+  min_instances         = 0
+  max_instances         = var.max_instances
+  cpu                   = "1"
+  memory                = "1Gi"
+  allow_unauthenticated = true
 
-      ports {
-        container_port = 8000
-      }
+  env_vars = {
+    OPENAI_MODEL = var.openai_model
+    CORS_ORIGINS = jsonencode(var.cors_origins)
+  }
 
-      resources {
-        limits = {
-          cpu    = "1"
-          memory = "1Gi"
-        }
-      }
-
-      env {
-        name = "OPENAI_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.openai_key.id
-            version = "latest"
-          }
-        }
-      }
-
-      env {
-        name  = "OPENAI_MODEL"
-        value = var.openai_model
-      }
-
-      env {
-        name  = "CORS_ORIGINS"
-        value = jsonencode(var.cors_origins)
-      }
+  secret_env_vars = {
+    OPENAI_API_KEY = {
+      secret_id = module.openai_secret.secret_id
+      version   = "latest"
     }
   }
 
-  depends_on = [google_project_service.apis]
+  depends_on = [module.apis, module.openai_secret]
 }
 
-# Allow unauthenticated access to backend
-resource "google_cloud_run_v2_service_iam_member" "backend_public" {
-  name     = google_cloud_run_v2_service.backend.name
-  location = var.region
-  project  = var.project_id
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
+# ─── Cloud Run: Frontend Service ──────────────────────────────────────────────
 
-# Frontend Cloud Run service
-resource "google_cloud_run_v2_service" "frontend" {
-  name     = "incident-responder-frontend"
-  location = var.region
-  project  = var.project_id
+module "frontend" {
+  source = "./modules/cloud-run"
 
-  template {
-    scaling {
-      min_instance_count = 0
-      max_instance_count = 3
-    }
+  project_id   = var.project_id
+  region       = var.region
+  service_name = "incident-responder-frontend"
+  image        = "${var.region}-docker.pkg.dev/${var.project_id}/incident-responder/frontend:latest"
 
-    containers {
-      image = "${var.region}-docker.pkg.dev/${var.project_id}/incident-responder/frontend:latest"
+  container_port        = 80
+  min_instances         = 0
+  max_instances         = 3
+  cpu                   = "1"
+  memory                = "256Mi"
+  allow_unauthenticated = true
 
-      ports {
-        container_port = 80
-      }
-
-      resources {
-        limits = {
-          cpu    = "1"
-          memory = "256Mi"
-        }
-      }
-    }
-  }
-
-  depends_on = [google_project_service.apis]
-}
-
-resource "google_cloud_run_v2_service_iam_member" "frontend_public" {
-  name     = google_cloud_run_v2_service.frontend.name
-  location = var.region
-  project  = var.project_id
-  role     = "roles/run.invoker"
-  member   = "allUsers"
+  depends_on = [module.apis]
 }
