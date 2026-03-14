@@ -29,24 +29,24 @@ graph TB
     end
 
     AM -->|Webhook| WH
-    Frontend -->|REST API| Backend
+    DB -->|REST API| WH
 
     subgraph Infrastructure [Infrastructure & GitOps]
         GH[GitHub Actions CI/CD]
         TF[Terraform IaC]
         CR[GCP Cloud Run]
         GH --> CR
-
-        subgraph Kubernetes [Kubernetes Deployment]
-            HLM[Helm Chart] --> K8S[Kubernetes Cluster]
-            ARGO[ArgoCD GitOps] --> HLM
-            K8S --> ING[Nginx Ingress]
-            ING --> CM[cert-manager TLS]
-        end
-
         TF --> CR
-        GH --> ARGO
     end
+
+    subgraph Kubernetes [Kubernetes Deployment]
+        HLM[Helm Chart] --> ING[Nginx Ingress]
+        ARGO[ArgoCD GitOps] --> HLM
+        ING --> BKPOD[Backend Pods]
+        ING --> FEPOD[Frontend Pods]
+    end
+
+    GH --> ARGO
 ```
 
 ## Features
